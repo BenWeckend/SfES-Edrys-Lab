@@ -7,6 +7,13 @@ Ziel ist es, typische Programmierfehler in drei Arduino-Projekten zu analysieren
 
 ---
 
+### Docker Setup (für Lehrkräfte)
+
+```bash
+docker run -it -p 5000:5000 --device=/dev/ttyACM0:/dev/ttyACM0 crosslab/edrys_pyxtermjs_arduino:latest
+
+---
+
 ### Überblick
 
 In diesem Lab arbeitest du mit **drei fehlerhaften Arduino-Programmen**.  
@@ -70,11 +77,3 @@ Deine Aufgabe ist es, die Fehler zu identifizieren, zu beheben und das Ergebnis 
 
 **Lernziel:**
 - Sensorik kalibrieren, ADC richtig konfigurieren.
-
----
-
-### Docker Setup (für Lehrkräfte)
-
-```bash
-docker run -it -p 5000:5000 --device=/dev/ttyACM0:/dev/ttyACM0 crosslab/edrys_pyxtermjs_arduino:latest
-
