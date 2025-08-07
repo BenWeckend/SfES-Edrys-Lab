@@ -1,0 +1,892 @@
+name: Arduino - Debugging Lab
+members:
+  teacher: []
+  student: []
+modules:
+  - url: https://edrys-labs.github.io/module-markdown-it/index.html
+    config:
+      content: >-
+        ## Willkommen im Remote Debugging Lab
+
+        Du wirst mit drei Arduino-Projekten arbeiten, die jeweils **bewusst
+        fehlerhaft** sind: 1. ADC-Auswertung des IR-Sensors 2.
+        Watchdog-Implementierung 3. RGB-LED-Steuerung
+
+        **Deine Aufgabe**:  - Analysiere und behebe die Fehler in jeder Aufgabe
+        - Teste deine Lösung durch Code-Upload - Beobachte das Ergebnis über den
+        Livestream
+
+        **Zeitlimit**: 15 Minuten pro Aufgabe
+    studentConfig:
+      content: ''
+    teacherConfig:
+      content: |
+
+        # Willkommen im Arduino Debugging Lab - Lehrerbereich
+        **Herzlich willkommen**
+
+        ## Lab-Einrichtung 1. **Hardware vorbereiten**:
+           - Arduino Uno mit Servo + RGB-LED + IR-Sensor
+           - Kamera auf das Setup gerichtet
+           - Stromversorgung sicherstellen
+           
+           **Sensor an A3, Servo an D3, RGB an D9/10/11**
+
+        2. **Docker-Container starten**:
+           ```bash
+           docker run -it -p 5000:5000 --device=/dev/ttyACM0:/dev/ttyACM0 crosslab/edrys_pyxtermjs_arduino:latest
+           ```
+
+        ## Aufgabenüberblick 
+        | Aufgabe | Fehlertyp | Lernziel | Zeitbudget |
+        |---------|-----------|----------|------------|
+        | 1 | RGB-Bitmasken | Registerprogrammierung | 15 min |
+        | 2 | Watchdog-Timer | Systemstabilität | 15 min |
+        | 3 | ADC-Schwellwert | Sensorik-Kalibrierung | 15 min |
+    stationConfig:
+      content: ''
+    showInCustom: lobby
+    width: full
+    height: huge
+  - url: https://edrys-labs.github.io/module-markdown-it/index.html
+    config:
+      content: |
+        # Arduino Debugging Lab
+
+        **Willkommen im Remote-Lab!**  
+        Ziel: Finde und behebe die Fehler in drei Arduino-Projekten.  
+        **Zeitlimit**: 15 Minuten pro Aufgabe
+
+        ---
+    showInCustom: station
+    width: half
+    height: medium
+    studentConfig:
+      content: ''
+    teacherConfig:
+      content: ''
+    stationConfig:
+      content: ''
+  - url: '    https://jh-488.github.io/edrys_module_timer/index.html'
+    config:
+      minutes: 10
+      autostart: true
+      label: Aufgabe 1 Timer
+    showInCustom: station
+    width: half
+    height: medium
+  - url: https://edrys-labs.github.io/module-station-stream/index.html
+    stationConfig:
+      video: true
+      audio: false
+    showInCustom: station
+    width: half
+    height: tall
+    config:
+      - url: https://edrys-labs.github.io/module-pyxtermjs/index.html
+        stationConfig:
+          server: http://localhost:5000/pty
+          execute: execute
+          script: >
+            echo $CODE | base64 --decode > Watchdog.ino arduino-cli sketch new
+            Watchdog olddir=$(pwd) mv Watchdog.ino Watchdog cd Watchdog
+            arduino-cli board attach -p /dev/ttyACM0 -b arduino:avr:uno cd
+            $olddir arduino-cli compile Watchdog && arduino-cli upload -p
+            /dev/ttyACM0 Watchdog && arduino-cli monitor -p /dev/ttyACM0
+          enable:
+            teacher: true
+            student: true
+        showInCustom: station
+        width: half
+        height: medium
+  - url: https://edrys-labs.github.io/module-pyxtermjs/index.html
+    stationConfig:
+      server: http://localhost:5000/pty
+      execute: execute
+      script: >
+        echo $CODE | base64 --decode > Blink.ino
+
+        arduino-cli sketch new Blink
+
+        olddir=$(pwd)
+
+        mv Blink.ino Blink
+
+        cd Blink
+
+        arduino-cli board attach -p /dev/ttyACM0 -b arduino:avr:uno
+
+        cd $olddir
+
+        arduino-cli compile Blink && arduino-cli upload -p /dev/ttyACM0 Blink &&
+        arduino-cli monitor -p /dev/ttyACM0
+      enable:
+        teacher: true
+        student: true
+    showInCustom: station
+    width: half
+    height: tall
+  - url: https://edrys-labs.github.io/module-markdown-it/index.html
+    config:
+      content: >
+
+        ##  Aufgabe 1: RGB-LED
+
+
+        ### Ziel
+
+        Eine RGB-LED soll sauber zwischen Rot, Grün und Blau wechseln - ohne
+        Farbmischungen!
+
+
+        ### Fehlerbeschreibung
+
+        ```c
+
+        void showColor(uint8_t color) {
+            // FEHLER: Kein Löschen der vorherigen Farbe!
+            if (color == 0) {
+                PORTB |= (1 << RED_PIN);   // Nur SET, kein CLEAR
+            } else if (color == 1) {
+                PORTB |= (1 << GREEN_PIN); // Führt zu OR-Verknüpfung
+            } // ...
+        }
+
+        ```
+
+
+        ### Symptome bei Fehler
+
+        - LED zeigt lila statt rot (Rot+Blau)
+
+        - Beim Wechsel zu Grün leuchtet gelb (Rot+Grün)
+
+        - Nach Blau wird weiß (alle Farben an)
+
+
+        ### Lernziel
+
+        - Bitweise Operationen korrekt anwenden
+
+        - Registermanipulation verstehen
+
+        - Zustandsmaschinen implementieren
+
+
+        ### Tipp
+
+        > Denke an die drei  Schritte:  
+
+        > 1. Aktuelle Zustände LÖSCHEN  
+
+        > 2. Neue Zustände SETZEN  
+
+        > 3. Niemals vergessen: Ein Register behält seinen Zustand!
+
+
+
+
+
+
+        # Lösung:
+
+        ```c
+
+        // Aufgabe 1: RGB Bitmaskierung korrigiert
+
+
+        #include <avr/io.h>
+
+        #include <util/delay.h>
+
+
+        #define RED_PIN PB1
+
+        #define GREEN_PIN PB2
+
+        #define BLUE_PIN PB3
+
+
+        void setupRGB() {
+            // RGB-Pins als Ausgang setzen
+            DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+        }
+
+
+        void clearRGB() {
+            // Alle RGB-LEDs ausschalten
+            PORTB &= ~((1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN));
+        }
+
+
+        void showColor(uint8_t color) {
+            clearRGB(); // Erst mal alles aus
+
+            if (color == 0) {
+                PORTB |= (1 << RED_PIN);
+            } else if (color == 1) {
+                PORTB |= (1 << GREEN_PIN);
+            } else if (color == 2) {
+                PORTB |= (1 << BLUE_PIN);
+            }
+        }
+
+
+        int main(void) {
+            setupRGB(); // Pins vorbereiten
+
+            while (1) {
+                showColor(0); // Rot anzeigen
+                _delay_ms(1000);
+                showColor(1); // Grün anzeigen
+                _delay_ms(1000);
+                showColor(2); // Blau anzeigen
+                _delay_ms(1000);
+            }
+        }
+
+        ```
+    studentConfig:
+      content: ''
+    teacherConfig:
+      content: ''
+    stationConfig:
+      content: ''
+    showInCustom: station
+    width: full
+    height: huge
+  - url: https://edrys-labs.github.io/module-editor/index.html
+    config:
+      runCommand: execute
+      language: c
+      theme: vs-light
+      editorText: |-
+        // Aufgabe 1: RGB Bitmaskierungsfehler
+
+        #include <avr/io.h>
+        #include <util/delay.h>
+
+        #define RED_PIN PB1
+        #define GREEN_PIN PB2
+        #define BLUE_PIN PB3
+
+        void setupRGB() {
+            DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+        }
+
+        void showColor(uint8_t color) {
+            if (color == 0) {
+                PORTB |= (1 << RED_PIN);
+            } else if (color == 1) {
+                PORTB |= (1 << GREEN_PIN);
+            } else if (color == 2) {
+                PORTB |= (1 << BLUE_PIN);
+            }
+        }
+
+        int main(void) {
+            setupRGB();
+            while (1) {
+                showColor(0); // Rot
+                _delay_ms(1000);
+                showColor(1); // Grün 
+                _delay_ms(1000);
+                showColor(2); // Blau 
+                _delay_ms(1000);
+            }
+        }
+      synchronize: false
+      files:
+        - name: Aufgabe1_ADC.ino
+          content: |
+            // ========== AUFGABE 1: FEHLERHAFTER CODE ==========
+            #include <avr/io.h>
+            #include <util/delay.h>
+            #include <avr/interrupt.h>
+
+            #define SERVO_PIN PD3
+            #define RED_PIN PB1
+            #define GREEN_PIN PB2
+            #define BLUE_PIN PB3
+
+            void setupPWM() {
+                DDRD |= (1 << SERVO_PIN);
+                DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+            }
+
+            void setServoAngle(uint8_t angle) {
+                uint16_t pulseWidth = 1000 + (angle * 1000UL) / 180;
+                for (uint8_t i = 0; i < 50; i++) {
+                    PORTD |= (1 << SERVO_PIN);
+                    _delay_us(pulseWidth);
+                    PORTD &= ~(1 << SERVO_PIN);
+                    _delay_us(20000 - pulseWidth);
+                }
+            }
+
+            void initADC() {
+                ADMUX = (1 << REFS0) | (1 << MUX1) | (1 << MUX0);
+                ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1);
+            }
+
+            uint16_t readADC() {
+                ADCSRA |= (1 << ADSC);
+                while (ADCSRA & (1 << ADSC));
+                return ADC;
+            }
+
+            int main(void) {
+                setupPWM();
+                initADC();
+                
+                while (1) {
+                    uint16_t irValue = readADC();
+                    
+                    // FEHLER: Schwellenwert zu hoch (1000 statt 400)
+                    if (irValue > 1000) {
+                        setServoAngle(90);
+                        PORTB |= (1 << GREEN_PIN);
+                        PORTB &= ~((1 << RED_PIN) | (1 << BLUE_PIN));
+                    } else {
+                        setServoAngle(0);
+                        PORTB |= (1 << RED_PIN);
+                        PORTB &= ~((1 << GREEN_PIN) | (1 << BLUE_PIN));
+                    }
+                    _delay_ms(200);
+                }
+                return 0;
+            }
+        - name: Aufgabe2_Watchdog.ino
+          content: |
+            // ========== AUFGABE 2: FEHLERHAFTER CODE ==========
+            #include <avr/io.h>
+            #include <util/delay.h>
+            #include <avr/wdt.h>
+            #include <avr/interrupt.h>
+
+            #define SERVO_PIN PD3
+            #define RED_PIN PB1
+            #define GREEN_PIN PB2
+            #define BLUE_PIN PB3
+
+            void setupPWM() {
+                DDRD |= (1 << SERVO_PIN);
+                DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+                
+                TCCR1A = (1 << COM1A1) | (1 << COM1B1) | (1 << WGM10);
+                TCCR1B = (1 << WGM12) | (1 << CS11);
+                OCR1A = 255;
+                OCR1B = 0;
+                PORTB &= ~(1 << BLUE_PIN);
+                
+                TCCR0A = (1 << COM0A1) | (1 << WGM01) | (1 << WGM00);
+                TCCR0B = (1 << CS01) | (1 << CS00);
+                OCR0A = 128;
+            }
+
+            void moveServo() {
+                // FEHLER: Kein wdt_reset() in den Schleifen
+                for (uint8_t angle = 10; angle <= 170; angle += 10) {
+                    OCR0A = angle;
+                    _delay_ms(300);
+                }
+                for (int angle = 170; angle >= 10; angle -= 10) {
+                    OCR0A = angle;
+                    _delay_ms(300);
+                }
+            }
+
+            int main(void) {
+                setupPWM();
+                wdt_enable(WDTO_2S);
+                
+                while (1) {
+                    moveServo();
+                    // FEHLER: Kein wdt_reset() hier
+                }
+            }
+        - name: Aufgabe3_RGB.ino
+          content: |
+            // ========== AUFGABE 3: FEHLERHAFTER CODE ==========
+            #include <avr/io.h>
+            #include <util/delay.h>
+
+            #define RED_PIN PB1
+            #define GREEN_PIN PB2
+            #define BLUE_PIN PB3
+
+            void setupRGB() {
+                DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+            }
+
+            void showColor(uint8_t color) {
+                // FEHLER: Kein Löschen vorheriger Zustände
+                if (color == 0) {
+                    PORTB |= (1 << RED_PIN);  // Nur OR, kein CLEAR
+                } else if (color == 1) {
+                    PORTB |= (1 << GREEN_PIN);
+                } else if (color == 2) {
+                    PORTB |= (1 << BLUE_PIN);
+                }
+            }
+
+            int main(void) {
+                setupRGB();
+                while (1) {
+                    showColor(0); // Rot
+                    _delay_ms(1000);
+                    showColor(1); // Grün (Rot bleibt an)
+                    _delay_ms(1000);
+                    showColor(2); // Blau (Rot+Grün bleiben an)
+                    _delay_ms(1000);
+                }
+            }
+    showInCustom: station
+    width: full
+    height: huge
+  - url: https://edrys-labs.github.io/module-markdown-it/index.html
+    config:
+      content: >
+        ## Aufgabe 2: Der Watchdog-Timer
+
+
+        ### Hintergrund
+
+        Der Watchdog-Timer ist eine Sicherheitseinrichtung im Mikrocontroller.
+        Wird er nicht regelmäßig **zurückgesetzt**, führt er nach einer gewissen
+        Zeit einen **Reset des Systems** durch. So kann sich ein hängendes
+        Programm automatisch neu starten.
+
+
+        In dieser Aufgabe wurde der WDT aktiviert. Deine Aufgabe ist es,
+        herauszufinden, **warum das Programm nicht wie erwartet funktioniert**,
+        und den Fehler zu beheben.
+
+
+        ---
+
+
+        ### Hardware-Setup
+
+        - Eine **rote LED** ist an **D9 (PB1)** angeschlossen.
+
+        - Der Mikrocontroller ist der **ATmega328P**
+
+
+
+        ### Aufgaben
+
+        1. **Verstehe den Code**: Was passiert im Hauptprogramm?
+
+        2. **Beobachte das Verhalten** auf der Hardware:
+           - Blinkt die LED regelmäßig?
+           - Gibt es Unterbrechungen?
+        3. **Finde die Ursache** des Problems:
+           - Was könnte den Mikrocontroller zum Zurücksetzen bringen?
+           - Welche Rolle spielt der **Watchdog** im Code?
+        4. **Behebe den Fehler**, sodass die LED **gleichmäßig und dauerhaft
+        blinkt**.
+
+
+        ---
+
+
+        ### Hinweise
+
+        - Der Watchdog muss in regelmäßigen Abständen **manuell zurückgesetzt**
+        werden, sonst führt er einen Reset durch.
+
+        - Schau dir die Funktion `wdt_enable()` genauer an.
+
+        - Gibt es vielleicht eine Funktion im Code, die **vergessen wurde**?
+
+
+        ---
+
+
+        ### Ziel
+
+        Am Ende sollte dein Programm eine **LED regelmäßig blinken lassen**,
+        **ohne Unterbrechungen oder Reset-Zyklen**.
+
+
+        # Lösung:
+
+        ```c
+
+        // Aufgabe 2: Watchdog (korrekt)
+
+
+        #include <avr/io.h>
+
+        #include <util/delay.h>
+
+        #include <avr/wdt.h>
+
+
+        #define RED_PIN PB1
+
+
+        void setupRGB() {
+            DDRB |= (1 << RED_PIN);
+        }
+
+
+        void blinkLED() {
+            PORTB ^= (1 << RED_PIN); // toggle LED
+            _delay_ms(500);
+            wdt_reset(); // Watchdog zurücksetzen!
+        }
+
+
+        int main(void) {
+            setupRGB();
+            wdt_enable(WDTO_2S); // WDt mit 2 s Timeout aktivieren
+
+            while (1) {
+                blinkLED();
+            }
+        }
+
+        ```
+    studentConfig:
+      content: ''
+    teacherConfig:
+      content: ''
+    stationConfig:
+      content: ''
+    showInCustom: station
+    width: full
+    height: tall
+  - url: https://edrys-labs.github.io/module-editor/index.html
+    config:
+      runCommand: execute
+      language: c
+      theme: vs-light
+      editorText: |
+        // Aufgabe 2: Watchdog (fehlerhaft)
+
+        #include <avr/io.h>
+        #include <util/delay.h>
+        #include <avr/wdt.h>
+
+        #define RED_PIN PB1
+
+        void setupRGB() {
+            DDRB |= (1 << RED_PIN);
+        }
+
+        void blinkLED() {
+            PORTB ^= (1 << RED_PIN);
+            _delay_ms(500);
+        }
+
+        int main(void) {
+            setupRGB();
+            wdt_enable(WDTO_2S); 
+
+            while (1) {
+                blinkLED();
+            }
+        }
+      synchronize: false
+    studentConfig: ''
+    teacherConfig: ''
+    stationConfig: ''
+    showInCustom: station
+    width: full
+    height: tall
+  - url: https://edrys-labs.github.io/module-markdown-it/index.html
+    config:
+      content: >-
+
+        ## Aufgabe 3: Briefkasten: IR-Sensor auswerten mit dem ADC
+
+
+        ### Hintergrund
+
+
+        Ein analoger Infrarot-Sensor ist mit dem Mikrocontroller verbunden. Der
+        Sensor liefert eine analoge Spannung je nach Abstand zu einem Objekt.  
+
+        Der ADC (Analog-Digital-Converter) wandelt diese Spannung in einen
+        digitalen Wert von **0 bis 1023** um.
+
+
+        Je nach gemessenem Wert soll:
+
+        - Der **Servo** auf **0° oder 180°** fahren.
+
+        - Eine **grüne oder rote LED** leuchten.
+
+
+        ---
+
+
+        ### Hardware-Setup
+
+
+        | Komponente        | Pin am Mikrocontroller |
+
+        |-------------------|------------------------|
+
+        | IR-Sensor         | A3 (ADC3 / PC3)        |
+
+        | Servo             | D3 (PD3)               |
+
+        | RGB-LED: Rot      | D9 (PB1)               |
+
+        | RGB-LED: Grün     | D10 (PB2)              |
+
+        | RGB-LED: Blau     | D11 (PB3)              |
+
+
+        ### Aufgabe:
+
+        Es gibt drei Fehler im Code, finde und korrigiere diese!
+
+
+        ### Deine Schritte
+
+
+        1. **Untersuche `initADC()`** – welcher Kanal wird ausgewählt?
+
+        2. **Prüfe die Datendeklaration in `main()`**  ist der Typ passend für
+        10-Bit-Werte?
+
+        3. **Beobachte die LED-Farben und Servobewegungen**  reagieren sie auf
+        einen nahen Gegenstand?
+
+        4. **Miss experimentell typische Sensorwerte** (mit Debug-Ausgaben oder
+        Schwellenwert-Test).
+
+        5. **Behebe alle drei Fehler und teste schrittweise!**
+
+
+
+        ---
+
+
+        ### Ziel
+
+
+        Nach der Korrektur soll dein Mikrocontroller:
+
+        - Den **Sensorwert korrekt lesen**,
+
+        - Den **Schwellenwert korrekt vergleichen**,
+
+        - Den **Servo in Position bringen**,
+
+        - Und die **richtige LED einschalten**.
+
+
+        ---
+
+
+
+
+        # Lösung
+
+
+        ### 1. **Falscher ADC-Kanal**
+
+        - Im Register `ADMUX` ist der falsche Kanal eingestellt (ADC0 statt
+        ADC3).
+
+        - Du misst also einen ganz anderen Pin – **nicht den Sensor**.
+
+
+        ### 2. **Falscher Datentyp für ADC-Wert**
+
+        - Der ADC liefert **10-Bit-Werte** (0–1023), aber sie werden in einer
+        **8-Bit-Variable (`uint8_t`)** gespeichert.
+
+        - Dadurch entstehen **Zahlenverluste**, die zu unerwartetem Verhalten
+        führen.
+
+
+        ### 3. **Unpassender Schwellenwert**
+
+        - Der Vergleichswert ist **> 1000** – das bedeutet: Nur sehr hohe
+        Sensorwerte lösen die Reaktion aus.
+
+        - Das ist in der Praxis selten oder gar nicht erreichbar → das Programm
+        reagiert **kaum oder nie**.
+
+
+        ---
+
+
+        Sensor an **A3 (ADC3)**, Servo an **D3**, RGB an **D9/D10/D11**
+
+
+        ```c
+
+        // Aufgabe 3: ADC-Auswertung  Richtig
+
+        // Sensor an A3 (ADC3), Servo an D3, RGB an D9/D10/D11
+
+
+        #include <avr/io.h>
+
+        #include <util/delay.h>
+
+
+        #define SERVO_PIN PD3
+
+        #define RED_PIN PB1
+
+        #define GREEN_PIN PB2
+
+        #define BLUE_PIN PB3
+
+
+        void setupPins() {
+            DDRD |= (1 << SERVO_PIN);
+            DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+        }
+
+
+        void setServoAngle(uint8_t angle) {
+            uint16_t pulseWidth = 1000 + (angle * 1000UL) / 180;
+            for (uint8_t i = 0; i < 50; i++) {
+                PORTD |= (1 << SERVO_PIN);
+                _delay_us(pulseWidth);
+                PORTD &= ~(1 << SERVO_PIN);
+                _delay_us(20000 - pulseWidth);
+            }
+        }
+
+
+        void initADC() {
+            ADMUX = (1 << REFS0) | (1 << MUX1) | (1 << MUX0); // Ref. Spannung AVcc; MUX1 MUX0 = Eingangskanal ADC3 (A3)
+            ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1); // Prescaler 64
+        }
+
+
+        uint16_t readADC() {
+            ADCSRA |= (1 << ADSC);              
+            while (ADCSRA & (1 << ADSC));       
+            return ADC;                         
+        }
+
+
+        int main(void) {
+            setupPins();
+            initADC();
+
+            while (1) {
+                uint16_t irValue = readADC();
+
+                if (irValue < 400) {
+                    setServoAngle(0);
+                    PORTB |= (1 << RED_PIN);
+                    PORTB &= ~((1 << GREEN_PIN) | (1 << BLUE_PIN));
+                } else {
+                    setServoAngle(180);
+                    PORTB |= (1 << GREEN_PIN);
+                    PORTB &= ~((1 << RED_PIN) | (1 << BLUE_PIN));
+                }
+
+                _delay_ms(200);
+            }
+
+            return 0;
+        }
+
+        ```
+    studentConfig:
+      content: ''
+    teacherConfig:
+      content: ''
+    stationConfig:
+      content: ''
+    showInCustom: station
+    width: full
+    height: tall
+  - url: https://edrys-labs.github.io/module-editor/index.html
+    config:
+      runCommand: execute
+      language: c
+      theme: vs-light
+      editorText: |+
+        // Aufgabe 3: ADC-Auswertung  (Fehlerhafte Version)
+
+        #include <avr/io.h>
+        #include <util/delay.h>
+
+        #define SERVO_PIN PD3
+        #define RED_PIN PB1
+        #define GREEN_PIN PB2
+        #define BLUE_PIN PB3
+
+        void setupPins() {
+            DDRD |= (1 << SERVO_PIN);
+            DDRB |= (1 << RED_PIN) | (1 << GREEN_PIN) | (1 << BLUE_PIN);
+        }
+
+        void setServoAngle(uint8_t angle) {
+            uint16_t pulseWidth = 1000 + (angle * 1000UL) / 180;
+            for (uint8_t i = 0; i < 50; i++) {
+                PORTD |= (1 << SERVO_PIN);
+                _delay_us(pulseWidth);
+                PORTD &= ~(1 << SERVO_PIN);
+                _delay_us(20000 - pulseWidth);
+            }
+        }
+
+        void initADC() {
+            ADMUX = (1 << REFS0);
+            ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1);
+        }
+
+        uint16_t readADC() {
+            ADCSRA |= (1 << ADSC);
+            while (ADCSRA & (1 << ADSC));
+            return ADC;
+        }
+
+        int main(void) {
+            setupPins();
+            initADC();
+
+            while (1) {
+                uint8_t irValue = readADC(); 
+                if (irValue > 1000) {
+                    setServoAngle(0);
+                    PORTB |= (1 << GREEN_PIN);
+                    PORTB &= ~((1 << RED_PIN) | (1 << BLUE_PIN));
+                } else {
+                    setServoAngle(180);
+                    PORTB |= (1 << RED_PIN);
+                    PORTB &= ~((1 << GREEN_PIN) | (1 << BLUE_PIN));
+                }
+
+                _delay_ms(200);
+            }
+
+            return 0;
+        }
+
+
+      synchronize: false
+    studentConfig: ''
+    teacherConfig: ''
+    stationConfig: ''
+    showInCustom: station
+    width: full
+    height: tall
+meta:
+  logo: >-
+    https://static4.arrow.com/-/media/arrow/images/820-x-410/0/0218-what-is-a-microcontroller-article.jpg
+  description: >-
+    In diesem Remote-Lab lernst du, typische Programmier- und Hardwarefehler in
+    Mikrocontroller-Setups zu erkennen und zu beheben. Du arbeitest an drei
+    Aufgaben (ADC-Auswertung, Watchdog, RGB-Bitmaskierung) und kannst die
+    Auswirkungen deiner Korrekturen live beobachten.
+  selfAssign: true
+  defaultNumberOfRooms: 0
+  id: 79sFHo6ONB1S25cTN7emXmOibQ2HNWb2G9X3Xn2x
+createdBy: jqlFnWvxWapo
+dateCreated: 1689064662293
