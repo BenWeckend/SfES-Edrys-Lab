@@ -11,8 +11,7 @@ Ziel ist es, typische Programmierfehler in drei Arduino-Projekten zu analysieren
 
 ```bash
 docker run -it -p 5000:5000 --device=/dev/ttyACM0:/dev/ttyACM0 crosslab/edrys_pyxtermjs_arduino:latest
-
----
+```
 
 ### Überblick
 
