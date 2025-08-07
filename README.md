@@ -2,7 +2,7 @@
 
 ## Arduino Debugging Lab
 
-Willkommen im **Arduino Debugging Lab** – einem interaktiven Lernmodul zur Fehlersuche in Mikrocontroller-Anwendungen.  
+Willkommen im **Arduino Debugging Lab** zur Fehlersuche in Mikrocontroller-Anwendungen.  
 Ziel ist es, typische Programmierfehler in drei Arduino-Projekten zu analysieren, zu korrigieren und zu testen.
 
 ---
@@ -70,15 +70,6 @@ Deine Aufgabe ist es, die Fehler zu identifizieren, zu beheben und das Ergebnis 
 
 **Lernziel:**
 - Sensorik kalibrieren, ADC richtig konfigurieren.
-
----
-
-### Hinweise zur Bearbeitung
-
-- Lies den Code aufmerksam.
-- Analysiere das Verhalten über den Livestream.
-- Überlege, **warum** der Fehler auftritt.
-- Teste deine Korrekturen mit dem Terminal-Modul.
 
 ---
 
